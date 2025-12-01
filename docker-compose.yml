@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: it-postgres
+    environment:
+      POSTGRES_DB: it_assets
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./db:/app/db
+
+  equipment_service:
+    build:
+      context: .
+      dockerfile: services/equipment_service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/it_assets
+    depends_on:
+      - postgres
+    ports:
+      - "8101:8000"
+
+  provider_service:
+    build:
+      context: .
+      dockerfile: services/provider_service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/it_assets
+    depends_on:
+      - postgres
+    ports:
+      - "8102:8000"
+
+  maintenance_service:
+    build:
+      context: .
+      dockerfile: services/maintenance_service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/it_assets
+      REMINDER_DAYS: 7
+      OBSOLETE_YEARS: 5
+    depends_on:
+      - postgres
+    ports:
+      - "8103:8000"
+
+  report_service:
+    build:
+      context: .
+      dockerfile: services/report_service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/it_assets
+    depends_on:
+      - postgres
+    ports:
+      - "8104:8000"
+
+  api_gateway:
+    build:
+      context: .
+      dockerfile: api_gateway/Dockerfile
+    environment:
+      EQUIPMENT_SERVICE_URL: http://equipment_service:8000
+      PROVIDER_SERVICE_URL: http://provider_service:8000
+      MAINTENANCE_SERVICE_URL: http://maintenance_service:8000
+      REPORT_SERVICE_URL: http://report_service:8000
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/it_assets
+    depends_on:
+      - postgres
+      - equipment_service
+      - provider_service
+      - maintenance_service
+      - report_service
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      API_GATEWAY_URL: http://api_gateway:8000
+    depends_on:
+      - api_gateway
+    ports:
+      - "8501:8501"
+
+volumes:
+  postgres_data:
+
